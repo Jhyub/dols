@@ -1,0 +1,13 @@
+[Unit]
+Description=Decrypt over LAN & SSH
+
+
+DefaultDependencies=no
+Before=sysinit.target
+Before=initrd-switch-root.target shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+ExecStart=/usr/bin/dols
