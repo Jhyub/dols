@@ -43,5 +43,55 @@ pub export fn start_sshd() void {
         return;
     }
 
+    const auth = authenticate_user(session);
+    if(auth != 1) {
+        std.debug.print("Authentication failed: {s}\n", .{c.ssh_get_error(session)});
+        c.ssh_disconnect(session);
+        return;
+    }
+    std.debug.print("User authenticated successfully\n", .{});
+
     return;
+}
+
+fn authenticate_user(session: *c.ssh_session_struct) i32 {
+    var message: c.ssh_message = undefined;
+    while (true) {
+        message = c.ssh_message_get(session);
+        defer c.ssh_message_free(message);
+
+        switch(c.ssh_message_type(message)) {
+            c.SSH_REQUEST_AUTH => {
+                switch(c.ssh_message_subtype(message)) {
+                    c.SSH_AUTH_METHOD_PASSWORD => {
+                        const username = std.mem.span(c.ssh_message_auth_user(message));
+                        const password = std.mem.span(c.ssh_message_auth_password(message));
+                        std.debug.print("User {s} wants to authenticate with password {s}\n", .{
+                            username,
+                            password
+                        });
+                        if(std.mem.eql(u8, username, "jhyub") and std.mem.eql(u8, password, "test")) {
+                            _ = c.ssh_message_auth_reply_success(message, 0);
+                            return 1;
+                        }
+                        _ = c.ssh_message_auth_set_methods(message, c.SSH_AUTH_METHOD_PASSWORD);
+                        _ = c.ssh_message_reply_default(message);
+                    },
+                    else => {
+                        std.debug.print("User {s} wants to authenticate with method {}\n", .{
+                            c.ssh_message_auth_user(message),
+                            c.ssh_message_subtype(message)
+                        });
+                        _ = c.ssh_message_auth_set_methods(message, c.SSH_AUTH_METHOD_PASSWORD);
+                        _ = c.ssh_message_reply_default(message);
+                    }
+                }
+            },
+            else => {
+                _ = c.ssh_message_auth_set_methods(message, c.SSH_AUTH_METHOD_PASSWORD);
+                _ = c.ssh_message_reply_default(message);
+            }
+        }
+    }
+    return 0;
 }
