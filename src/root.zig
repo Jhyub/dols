@@ -2,13 +2,13 @@
 //! you are making an executable, the convention is to delete this file and
 //! start with main.zig instead.
 const std = @import("std");
+const cryptsetup = @import("cryptsetup.zig");
 const testing = std.testing;
 
 const c = @cImport({
     @cInclude("libssh/libssh.h");
     @cInclude("libssh/server.h");
-    @cInclude("libcryptsetup.h");
-    });   
+    });
 
 pub fn start_sshd(allocator: std.mem.Allocator) !void {
     defer _ = c.ssh_finalize();
