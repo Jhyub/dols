@@ -6,7 +6,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    try lib.start_sshd(allocator);
+    try lib.start_sshd(allocator, 121);
 }
 
 
