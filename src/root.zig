@@ -10,7 +10,7 @@ const c = @cImport({
     @cInclude("libcryptsetup.h");
     });   
 
-pub export fn start_sshd() void {
+pub fn start_sshd(allocator: std.mem.Allocator) !void {
     defer _ = c.ssh_finalize();
     std.debug.print("Starting SSH daemon...\n", .{});
     const port = 121;
@@ -44,18 +44,18 @@ pub export fn start_sshd() void {
         return;
     }
 
-    const auth = authenticateUser(session);
-    if(auth != 1) {
+    if(!try authenticateUser(allocator, session)) {
         std.debug.print("Authentication failed: {s}\n", .{c.ssh_get_error(session)});
         c.ssh_disconnect(session);
         return;
     }
+
     std.debug.print("User authenticated successfully\n", .{});
 
     return;
 }
 
-fn authenticateUser(session: *c.ssh_session_struct) i32 {
+fn authenticateUser(allocator: std.mem.Allocator, session: *c.ssh_session_struct) !bool {
     var msg: c.ssh_message = undefined;
 
     const name = "Welcome to dols, v0.0.0\n";
@@ -79,24 +79,21 @@ fn authenticateUser(session: *c.ssh_session_struct) i32 {
                         });
                         if(std.mem.eql(u8, username, "jhyub") and std.mem.eql(u8, password, "test")) {
                             _ = c.ssh_message_auth_reply_success(msg, 0);
-                            return 1;
+                            return true;
                         }
                         _ = c.ssh_message_auth_set_methods(msg, c.SSH_AUTH_METHOD_PASSWORD);
                         _ = c.ssh_message_reply_default(msg);
                     },
                     c.SSH_AUTH_METHOD_INTERACTIVE => {
                         if(c.ssh_message_auth_kbdint_is_response(msg) == 0) {
-                            var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-                            defer _ = gpa.deinit();
-                            const allocator = gpa.allocator();
-
                             const username = std.mem.span(c.ssh_message_auth_user(msg));
-                            const instruction = std.fmt.allocPrint(allocator, instructionFormat, .{username}) catch {return 1;};
+                            const instruction = try std.fmt.allocPrint(allocator, instructionFormat, .{username});
                             defer allocator.free(instruction);
                             _ = c.ssh_message_auth_interactive_request(msg, name, @ptrCast(instruction), 1, @ptrCast(&prompt), @ptrCast(&echo));
                         } else {
                             if(kbdintCheckResponse(session)) {
-                                return 1;
+                                _ = c.ssh_message_auth_reply_success(msg, 0);
+                                return true;
                             }
                             _ = c.ssh_message_auth_set_methods(msg, c.SSH_AUTH_METHOD_INTERACTIVE);
                             _ = c.ssh_message_reply_default(msg);
@@ -119,7 +116,7 @@ fn authenticateUser(session: *c.ssh_session_struct) i32 {
             }
         }
     }
-    return 0;
+    return false;
 }
 
 fn kbdintCheckResponse(session: *c.ssh_session_struct) bool {
