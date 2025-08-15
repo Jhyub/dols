@@ -7,6 +7,7 @@ const testing = std.testing;
 const c = @cImport({
     @cInclude("libssh/libssh.h");
     @cInclude("libssh/server.h");
+    @cInclude("libcryptsetup.h");
     });   
 
 pub export fn start_sshd() void {
