@@ -3,6 +3,7 @@
 //! start with main.zig instead.
 const std = @import("std");
 const cryptsetup = @import("cryptsetup.zig");
+const crypttab = @import("crypttab.zig");
 const testing = std.testing;
 
 const c = @cImport({
