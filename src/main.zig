@@ -7,7 +7,8 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
 
-    const crypttab = "luks-test /dev/disk/by-uuid/47f7ad02-54f4-4033-a288-6853d9836edf";
+    const crypttab = try (try std.fs.openFileAbsolute("/etc/crypttab", .{})).readToEndAlloc(allocator, std.math.maxInt(usize));
+    defer allocator.free(crypttab);
     const entries= try lib.crypttab.parseCrypttab(allocator, crypttab);
     defer allocator.free(entries);
     defer lib.crypttab.freeCrypttab(allocator, entries);
