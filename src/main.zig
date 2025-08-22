@@ -7,7 +7,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
 
-    const crypttab = try (try std.fs.openFileAbsolute("/etc/crypttab", .{})).readToEndAlloc(allocator, std.math.maxInt(usize));
+    const crypttab = try (try std.fs.cwd().openFile("/etc/crypttab", .{})).readToEndAlloc(allocator, 1024);
     defer allocator.free(crypttab);
     const entries= try lib.crypttab.parseCrypttab(allocator, crypttab);
     defer allocator.free(entries);
