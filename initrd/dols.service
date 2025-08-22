@@ -1,13 +1,10 @@
 [Unit]
 Description=Decrypt over LAN & SSH
 
-
 DefaultDependencies=no
-Before=sysinit.target
-Before=initrd-switch-root.target shutdown.target
+Before=cryptsetup.target
 
 [Service]
-Type=oneshot
-RemainAfterExit=yes
-
+Type=exec
 ExecStart=/usr/bin/dols
+ExecStopPost=/bin/systemctl restart systemd-cryptsetup@root.service

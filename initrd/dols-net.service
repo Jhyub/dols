@@ -1,0 +1,11 @@
+[Unit]
+Description=Initialize network for DoLS
+
+DefaultDependencies=no
+Before=dols.service
+After=systemd-modules-load.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/ipconfig "ip=:::::eth0:dhcp"
