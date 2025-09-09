@@ -18,7 +18,7 @@ pub const CrypttabEntry = struct {
         };
     }
 
-    fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+    fn deinit(self: *const Self, allocator: std.mem.Allocator) void {
         allocator.free(self.volumeName);
         allocator.free(self.encryptedDevice);
         if (self.keyFile) |keyFile| {
