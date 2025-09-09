@@ -123,7 +123,7 @@ fn kbdintCheckResponse(session: *c.ssh_session_struct, answers: []const []const 
     }
 
     for (0..answers.len) |i| {
-        const reply = std.mem.span(c.ssh_userauth_kbdint_getanswer(session, i));
+        const reply = std.mem.span(c.ssh_userauth_kbdint_getanswer(session, @intCast(i)));
         const answer = answers[i];
         if (!std.mem.eql(u8, reply, answer)) {
             return false;
