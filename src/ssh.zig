@@ -1,6 +1,7 @@
 const std = @import("std");
 const crypttab = @import("crypttab.zig");
 const cryptsetup = @import("cryptsetup.zig");
+const shadow = @import("shadow.zig");
 
 const c = @cImport({
     @cInclude("libssh/libssh.h");
@@ -77,7 +78,7 @@ fn authenticateUser(allocator: std.mem.Allocator, session: *c.ssh_session_struct
                         const username = std.mem.span(c.ssh_message_auth_user(msg));
                         const password = std.mem.span(c.ssh_message_auth_password(msg));
                         std.debug.print("User {s} wants to authenticate with password {s}\n", .{ username, password });
-                        if (std.mem.eql(u8, username, "jhyub") and std.mem.eql(u8, password, "test")) {
+                        if (shadow.authenticateByUsername(username, password)) {
                             _ = c.ssh_message_auth_reply_success(msg, 1);
                             return true;
                         }

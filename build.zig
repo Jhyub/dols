@@ -54,8 +54,9 @@ pub fn build(b: *std.Build) void {
     });
 
     lib.linkLibC();
-    lib.linkSystemLibrary("ssh");
+    lib.linkSystemLibrary("crypt");
     lib.linkSystemLibrary("cryptsetup");
+    lib.linkSystemLibrary("ssh");
 
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when
