@@ -7,7 +7,7 @@ pub fn main() !void {
     var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
-    
+
     var parser = toml.Parser(lib.config.ConfigFile).init(allocator);
     defer parser.deinit();
     const config_file = (try parser.parseFile("/etc/dols.toml")).value;
@@ -21,5 +21,5 @@ pub fn main() !void {
     for (entries) |entry| {
         std.debug.print("{s}\n{s}\n{?s}\n{?s}\n", .{ entry.volumeName, entry.encryptedDevice, entry.keyFile, entry.options });
     }
-    try lib.ssh.startSshd(allocator, config.port, entries, config.auth_try_limit);
+    try lib.ssh.startSshd(allocator, &config, entries);
 }

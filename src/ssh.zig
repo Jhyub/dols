@@ -1,4 +1,5 @@
 const std = @import("std");
+const config = @import("config.zig");
 const crypttab = @import("crypttab.zig");
 const cryptsetup = @import("cryptsetup.zig");
 const shadow = @import("shadow.zig");
@@ -8,27 +9,27 @@ const c = @cImport({
     @cInclude("libssh/server.h");
 });
 
-pub fn startSshd(allocator: std.mem.Allocator, port: i32, entries: []crypttab.CrypttabEntry, auth_try_limit: u32) !void {
+pub fn startSshd(allocator: std.mem.Allocator, conf: *const config.Config, entries: []crypttab.CrypttabEntry) !void {
     defer _ = c.ssh_finalize();
-    std.debug.print("Starting SSH daemon at port {}...\n", .{port});
+    std.debug.print("Starting SSH daemon at port {}...\n", .{conf.port});
     const sshbind = c.ssh_bind_new().?;
     defer c.ssh_bind_free(sshbind);
     const session = c.ssh_new().?;
 
     _ = c.ssh_bind_options_set(sshbind, c.SSH_BIND_OPTIONS_RSAKEY, "/etc/ssh/ssh_host_rsa_key");
     _ = c.ssh_bind_options_set(sshbind, c.SSH_BIND_OPTIONS_ECDSAKEY, "/etc/ssh/ssh_host_ecdsa_key");
-    _ = c.ssh_bind_options_set(sshbind, c.SSH_BIND_OPTIONS_BINDPORT, &port);
+    _ = c.ssh_bind_options_set(sshbind, c.SSH_BIND_OPTIONS_BINDPORT, &conf.port);
 
     if (c.ssh_bind_listen(sshbind) < 0) {
         std.debug.print("ssh_bind_listen failed: {s}\n", .{c.ssh_get_error(sshbind)});
-        std.debug.print("Failed to listen on port {}\n", .{port});
+        std.debug.print("Failed to listen on port {}\n", .{conf.port});
         return;
     }
 
-    std.debug.print("SSH daemon started on port {}\n", .{port});
+    std.debug.print("SSH daemon started on port {}\n", .{conf.port});
 
     var auth_try_count: u32 = 0;
-    while (auth_try_limit == 0 or auth_try_count < auth_try_limit) {
+    while (conf.auth_try_limit == 0 or auth_try_count < conf.auth_try_limit) {
         const r = c.ssh_bind_accept(sshbind, session);
         defer c.ssh_disconnect(session);
         if (r == c.SSH_ERROR) {
