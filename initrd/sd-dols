@@ -10,7 +10,9 @@ build() {
 
     map add_file \
         '/etc/ssh/ssh_host_rsa_key' \
-        '/etc/ssh/ssh_host_ecdsa_key' 
+        '/etc/ssh/ssh_host_ecdsa_key' \
+        '/etc/passwd' \
+        '/etc/shadow'
 
     add_checked_modules '/drivers/net/'
 }
