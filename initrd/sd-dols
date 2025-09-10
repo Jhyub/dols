@@ -12,7 +12,8 @@ build() {
         '/etc/ssh/ssh_host_rsa_key' \
         '/etc/ssh/ssh_host_ecdsa_key' \
         '/etc/passwd' \
-        '/etc/shadow'
+        '/etc/shadow' \
+        '/etc/dols.toml'
 
     add_checked_modules '/drivers/net/'
 }
