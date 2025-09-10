@@ -14,7 +14,6 @@ pub fn startSshd(allocator: std.mem.Allocator, port: i32, entries: []crypttab.Cr
     const sshbind = c.ssh_bind_new().?;
     defer c.ssh_bind_free(sshbind);
     const session = c.ssh_new().?;
-    defer c.ssh_disconnect(session);
 
     _ = c.ssh_bind_options_set(sshbind, c.SSH_BIND_OPTIONS_RSAKEY, "/etc/ssh/ssh_host_rsa_key");
     _ = c.ssh_bind_options_set(sshbind, c.SSH_BIND_OPTIONS_ECDSAKEY, "/etc/ssh/ssh_host_ecdsa_key");
@@ -31,6 +30,7 @@ pub fn startSshd(allocator: std.mem.Allocator, port: i32, entries: []crypttab.Cr
     var auth_try_count: u32 = 0;
     while (auth_try_limit == 0 or auth_try_count < auth_try_limit) {
         const r = c.ssh_bind_accept(sshbind, session);
+        defer c.ssh_disconnect(session);
         if (r == c.SSH_ERROR) {
             std.debug.print("Failed to accept connection: {s}\n", .{c.ssh_get_error(sshbind)});
             continue;
@@ -43,7 +43,6 @@ pub fn startSshd(allocator: std.mem.Allocator, port: i32, entries: []crypttab.Cr
 
         if (!try authenticateUser(allocator, session)) {
             std.debug.print("Authentication failed\n", .{});
-            c.ssh_disconnect(session);
             auth_try_count += 1;
             continue;
         }
