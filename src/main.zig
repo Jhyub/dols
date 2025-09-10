@@ -14,5 +14,5 @@ pub fn main() !void {
     for (entries) |entry| {
         std.debug.print("{s}\n{s}\n{?s}\n{?s}\n", .{ entry.volumeName, entry.encryptedDevice, entry.keyFile, entry.options });
     }
-    try lib.ssh.startSshd(allocator, 121, entries);
+    try lib.ssh.startSshd(allocator, 121, entries, 0);
 }
