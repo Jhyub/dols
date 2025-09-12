@@ -11,27 +11,28 @@ const c = @cImport({
 
 pub fn startSshd(allocator: std.mem.Allocator, conf: *const config.Config, entries: []crypttab.CrypttabEntry) !void {
     defer _ = c.ssh_finalize();
+    var auth_try_count: u32 = 0;
     std.debug.print("Starting SSH daemon at port {}...\n", .{conf.port});
     const sshbind = c.ssh_bind_new().?;
     defer c.ssh_bind_free(sshbind);
-    const session = c.ssh_new().?;
 
     _ = c.ssh_bind_options_set(sshbind, c.SSH_BIND_OPTIONS_RSAKEY, "/etc/ssh/ssh_host_rsa_key");
     _ = c.ssh_bind_options_set(sshbind, c.SSH_BIND_OPTIONS_ECDSAKEY, "/etc/ssh/ssh_host_ecdsa_key");
     _ = c.ssh_bind_options_set(sshbind, c.SSH_BIND_OPTIONS_BINDPORT, &conf.port);
 
-    if (c.ssh_bind_listen(sshbind) < 0) {
-        std.debug.print("ssh_bind_listen failed: {s}\n", .{c.ssh_get_error(sshbind)});
-        std.debug.print("Failed to listen on port {}\n", .{conf.port});
-        return;
-    }
-
-    std.debug.print("SSH daemon started on port {}\n", .{conf.port});
-
-    var auth_try_count: u32 = 0;
     while (conf.auth_try_limit == 0 or auth_try_count < conf.auth_try_limit) {
+        if (c.ssh_bind_listen(sshbind) < 0) {
+            std.debug.print("ssh_bind_listen failed: {s}\n", .{c.ssh_get_error(sshbind)});
+            std.debug.print("Failed to listen on port {}\n", .{conf.port});
+            return;
+        }
+
+        std.debug.print("SSH daemon started on port {}\n", .{conf.port});
+
+        const session = c.ssh_new().?;
         const r = c.ssh_bind_accept(sshbind, session);
         defer c.ssh_disconnect(session);
+
         if (r == c.SSH_ERROR) {
             std.debug.print("Failed to accept connection: {s}\n", .{c.ssh_get_error(sshbind)});
             continue;
@@ -64,10 +65,13 @@ pub fn startSshd(allocator: std.mem.Allocator, conf: *const config.Config, entri
 fn authenticateUser(allocator: std.mem.Allocator, session: *c.ssh_session_struct) !bool {
     var msg: c.ssh_message = undefined;
 
-    const name = "Welcome to dols, v0.0.0\n";
+    const name = "Welcome to dols, v0.0.0-250913\n";
     const instructionFormat = "Enter ssh password for user {s}";
     var prompt: [1][*c]const u8 = .{@ptrCast("Password: ")};
     var echo = [1]u8{0};
+
+    var username: [:0]const u8 = try allocator.dupeZ(u8, "");
+    defer allocator.free(username);
 
     while (true) {
         msg = c.ssh_message_get(session);
@@ -77,33 +81,37 @@ fn authenticateUser(allocator: std.mem.Allocator, session: *c.ssh_session_struct
             c.SSH_REQUEST_AUTH => {
                 switch (c.ssh_message_subtype(msg)) {
                     c.SSH_AUTH_METHOD_PASSWORD => {
-                        const username = std.mem.span(c.ssh_message_auth_user(msg));
+                        allocator.free(username);
+                        username = try allocator.dupeZ(u8, std.mem.span(c.ssh_message_auth_user(msg)));
                         const password = std.mem.span(c.ssh_message_auth_password(msg));
                         std.debug.print("User {s} wants to authenticate with password {s}\n", .{ username, password });
                         if (shadow.authenticateByUsername(username, password)) {
                             _ = c.ssh_message_auth_reply_success(msg, 1);
                             return true;
                         }
-                        _ = c.ssh_message_auth_set_methods(msg, c.SSH_AUTH_METHOD_PASSWORD);
-                        _ = c.ssh_message_reply_default(msg);
+                        return false;
                     },
                     c.SSH_AUTH_METHOD_INTERACTIVE => {
                         if (c.ssh_message_auth_kbdint_is_response(msg) == 0) {
-                            const username = std.mem.span(c.ssh_message_auth_user(msg));
+                            allocator.free(username);
+                            username = try allocator.dupeZ(u8, std.mem.span(c.ssh_message_auth_user(msg)));
                             const instruction = try std.fmt.allocPrint(allocator, instructionFormat, .{username});
                             defer allocator.free(instruction);
                             _ = c.ssh_message_auth_interactive_request(msg, name, @ptrCast(instruction), 1, @ptrCast(&prompt), @ptrCast(&echo));
                         } else {
-                            if (kbdintCheckResponse(session, &[_][]const u8{"test"})) {
+                            const reply = std.mem.span(c.ssh_userauth_kbdint_getanswer(session, 0));
+                            std.debug.print("User {s} wants to authenticate with password {s}\n", .{ username, reply });
+                            if (shadow.authenticateByUsername(username, reply)) {
                                 _ = c.ssh_message_auth_reply_success(msg, 1);
                                 return true;
                             }
-                            _ = c.ssh_message_auth_set_methods(msg, c.SSH_AUTH_METHOD_INTERACTIVE);
-                            _ = c.ssh_message_reply_default(msg);
+                            return false;
                         }
                     },
                     else => {
-                        std.debug.print("User {s} wants to authenticate with method {}\n", .{ c.ssh_message_auth_user(msg), c.ssh_message_subtype(msg) });
+                        allocator.free(username);
+                        username = try allocator.dupeZ(u8, std.mem.span(c.ssh_message_auth_user(msg)));
+                        std.debug.print("User {s} wants to authenticate with method {}\n", .{ username, c.ssh_message_subtype(msg) });
                         _ = c.ssh_message_auth_set_methods(msg, c.SSH_AUTH_METHOD_INTERACTIVE);
                         _ = c.ssh_message_reply_default(msg);
                     },
