@@ -32,15 +32,16 @@ pub const CrypttabEntry = struct {
 
 pub fn parseCrypttab(allocator: std.mem.Allocator, crypttab: []const u8) ![]CrypttabEntry {
     var lines = std.mem.splitSequence(u8, crypttab, "\n");
-    var list = std.ArrayList(CrypttabEntry).init(allocator);
+    var list: std.ArrayList(CrypttabEntry) = .empty;
+    defer list.deinit(allocator);
     while (lines.next()) |line| {
         if (line.len == 0) continue;
         if (line[0] == '#') continue;
         if (line[0] == '\n') continue;
         const entry = try CrypttabEntry.init(allocator, line);
-        try list.append(entry);
+        try list.append(allocator, entry);
     }
-    return list.toOwnedSlice();
+    return list.toOwnedSlice(allocator);
 }
 
 pub fn freeCrypttab(allocator: std.mem.Allocator, entries: []CrypttabEntry) void {
