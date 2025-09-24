@@ -8,6 +8,10 @@
             .url = "git+https://github.com/sam701/zig-toml#3aaeb0bf14935eabae118196f7949b404a42f8ea",
             .hash = "toml-0.3.0-bV14BTd8AQA-wZERtB3dvRE3eSZ-m48AyXFUGkZ_Tm3d",
         },
+        .@"mkinitcpio-nfs-utils" = .{
+            .url = "https://naru.jhyub.dev/sources.archlinux.org/other/mkinitcpio/mkinitcpio-nfs-utils-0.3.tar.gz",
+            .hash = "N-V-__8AAOi_AQDCHqwise7EXuHL3Hep5ytnhXPsBKIkJtKd",
+        },
     },
     .paths = .{
         "build.zig",
