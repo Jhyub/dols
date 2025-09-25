@@ -18,8 +18,6 @@ pub fn main() !void {
     const entries = try lib.crypttab.parseCrypttab(allocator, crypttab);
     defer allocator.free(entries);
     defer lib.crypttab.freeCrypttab(allocator, entries);
-    for (entries) |entry| {
-        std.debug.print("{s}\n{s}\n{?s}\n{?s}\n", .{ entry.volumeName, entry.encryptedDevice, entry.keyFile, entry.options });
-    }
+
     try lib.ssh.startSshd(allocator, &config, entries);
 }
