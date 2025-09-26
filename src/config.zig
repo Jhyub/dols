@@ -1,12 +1,10 @@
 pub const ConfigFile = struct {
     port: ?u16,
-
     auth_try_limit: ?u32,
 };
 
 pub const Config = struct {
     port: u16,
-
     auth_try_limit: u32,
 
     pub fn init(from: ConfigFile) Config {
