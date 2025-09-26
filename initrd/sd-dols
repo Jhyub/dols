@@ -2,11 +2,8 @@
 
 build() {
     add_binary "/usr/bin/dols" "/usr/bin/dols"
-    add_binary "/usr/bin/ip" "/sbin/ip"
-    add_binary "/usr/lib/initcpio/ipconfig" "/sbin/ipconfig"
 
     add_systemd_unit 'dols.service'
-    add_systemd_unit 'dols-net.service'
 
     map add_file \
         '/etc/ssh/ssh_host_rsa_key' \

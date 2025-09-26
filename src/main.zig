@@ -13,6 +13,10 @@ pub fn main() !void {
     const config_file = (try parser.parseFile("/etc/dols.toml")).value;
     const config = lib.config.Config.init(config_file);
 
+    lib.ipconfig.ipconfig(allocator, &config) catch {
+        return;
+    };
+
     const crypttab = try (try std.fs.cwd().openFile("/etc/crypttab", .{})).readToEndAlloc(allocator, 1024);
     defer allocator.free(crypttab);
     const entries = try lib.crypttab.parseCrypttab(allocator, crypttab);

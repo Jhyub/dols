@@ -5,5 +5,6 @@ const std = @import("std");
 pub const config = @import("config.zig");
 pub const cryptsetup = @import("cryptsetup.zig");
 pub const crypttab = @import("crypttab.zig");
+pub const ipconfig = @import("ipconfig.zig");
 pub const shadow = @import("shadow.zig");
 pub const ssh = @import("ssh.zig");

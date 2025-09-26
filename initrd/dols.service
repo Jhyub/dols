@@ -3,6 +3,7 @@ Description=Decrypt over LAN & SSH
 
 DefaultDependencies=no
 Before=cryptsetup.target
+After=systemd-modules-load.service
 
 [Service]
 Type=exec
