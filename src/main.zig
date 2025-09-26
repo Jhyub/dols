@@ -8,7 +8,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var parser = toml.Parser(lib.config.ConfigFile).init(allocator);
+    var parser = toml.Parser(lib.config.ConfigFile).init(std.heap.c_allocator);
     defer parser.deinit();
     const config_file = (try parser.parseFile("/etc/dols.toml")).value;
     const config = lib.config.Config.init(config_file);
