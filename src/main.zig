@@ -21,7 +21,9 @@ pub fn main() !void {
     defer allocator.free(crypttab);
     const entries = try lib.crypttab.parseCrypttab(allocator, crypttab);
     defer allocator.free(entries);
-    defer lib.crypttab.freeCrypttab(allocator, entries);
+    defer for (entries) |entry| {
+        entry.deinit();
+    };
 
     try lib.ssh.startSshd(allocator, &config, entries);
 }

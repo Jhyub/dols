@@ -1,6 +1,7 @@
 const std = @import("std");
 
 pub const CrypttabEntry = struct {
+    allocator: *const std.mem.Allocator,
     volumeName: [:0]const u8,
     encryptedDevice: [:0]const u8,
     keyFile: ?[:0]const u8,
@@ -8,9 +9,10 @@ pub const CrypttabEntry = struct {
 
     const Self = @This();
 
-    fn init(allocator: std.mem.Allocator, line: []const u8) !Self {
+    pub fn init(allocator: std.mem.Allocator, line: []const u8) !Self {
         var parts = std.mem.splitSequence(u8, line, " ");
         return Self{
+            .allocator = &allocator,
             .volumeName = try allocator.dupeZ(u8, parts.next().?),
             .encryptedDevice = try allocator.dupeZ(u8, parts.next().?),
             .keyFile = if (parts.next()) |p| try allocator.dupeZ(u8, p) else null,
@@ -18,14 +20,14 @@ pub const CrypttabEntry = struct {
         };
     }
 
-    fn deinit(self: *const Self, allocator: std.mem.Allocator) void {
-        allocator.free(self.volumeName);
-        allocator.free(self.encryptedDevice);
+    pub fn deinit(self: *const Self) void {
+        self.allocator.free(self.volumeName);
+        self.allocator.free(self.encryptedDevice);
         if (self.keyFile) |keyFile| {
-            allocator.free(keyFile);
+            self.allocator.free(keyFile);
         }
         if (self.options) |options| {
-            allocator.free(options);
+            self.allocator.free(options);
         }
     }
 };
@@ -42,10 +44,4 @@ pub fn parseCrypttab(allocator: std.mem.Allocator, crypttab: []const u8) ![]Cryp
         try list.append(allocator, entry);
     }
     return list.toOwnedSlice(allocator);
-}
-
-pub fn freeCrypttab(allocator: std.mem.Allocator, entries: []CrypttabEntry) void {
-    for (entries) |entry| {
-        entry.deinit(allocator);
-    }
 }
