@@ -8,3 +8,4 @@ pub const crypttab = @import("crypttab.zig");
 pub const ipconfig = @import("ipconfig.zig");
 pub const shadow = @import("shadow.zig");
 pub const ssh = @import("ssh.zig");
+pub const systemd_ask_password = @import("systemd_ask_password.zig");
