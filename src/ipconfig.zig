@@ -32,11 +32,6 @@ pub fn ipconfig(allocator: std.mem.Allocator, conf: *const config.Config) !void 
     //    }
     //}
 
-    for (argv.items) |item| {
-        std.debug.print("argv: {s}\n", .{item.?});
-    }
-    std.debug.print("argc: {d}\n", .{argv.items.len});
-
     try argv.append(allocator, null);
 
     const ret = c.ipconfig_main(@intCast(argv.items.len - 1), @ptrCast(argv.items));
