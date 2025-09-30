@@ -1,7 +1,7 @@
 const std = @import("std");
 
 pub const CrypttabEntry = struct {
-    allocator: *const std.mem.Allocator,
+    arena: *std.heap.ArenaAllocator,
     volumeName: [:0]const u8,
     encryptedDevice: [:0]const u8,
     keyFile: ?[:0]const u8,
@@ -10,25 +10,25 @@ pub const CrypttabEntry = struct {
     const Self = @This();
 
     pub fn init(allocator: std.mem.Allocator, line: []const u8) !Self {
+        const arena = try allocator.create(std.heap.ArenaAllocator);
+        errdefer allocator.destroy(arena);
+        arena.* = std.heap.ArenaAllocator.init(allocator);
+        const arena_allocator = arena.allocator();
+
         var parts = std.mem.splitSequence(u8, line, " ");
         return Self{
-            .allocator = &allocator,
-            .volumeName = try allocator.dupeZ(u8, parts.next().?),
-            .encryptedDevice = try allocator.dupeZ(u8, parts.next().?),
-            .keyFile = if (parts.next()) |p| try allocator.dupeZ(u8, p) else null,
-            .options = if (parts.next()) |p| try allocator.dupeZ(u8, p) else null,
+            .arena = arena,
+            .volumeName = try arena_allocator.dupeZ(u8, parts.next().?),
+            .encryptedDevice = try arena_allocator.dupeZ(u8, parts.next().?),
+            .keyFile = if (parts.next()) |p| try arena_allocator.dupeZ(u8, p) else null,
+            .options = if (parts.next()) |p| try arena_allocator.dupeZ(u8, p) else null,
         };
     }
 
     pub fn deinit(self: *const Self) void {
-        self.allocator.free(self.volumeName);
-        self.allocator.free(self.encryptedDevice);
-        if (self.keyFile) |keyFile| {
-            self.allocator.free(keyFile);
-        }
-        if (self.options) |options| {
-            self.allocator.free(options);
-        }
+        const allocator = self.arena.child_allocator;
+        self.arena.deinit();
+        allocator.destroy(self.arena);
     }
 };
 
