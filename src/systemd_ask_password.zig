@@ -55,7 +55,6 @@ pub const Ask = struct {
 
         var is_section_ask = false;
         while (reader.takeDelimiterExclusive('\n')) |line| {
-            std.debug.print("buf[0]: {c}\n", .{buf[0]});
             const trimmed = std.mem.trim(u8, line, " \t\r");
             if (trimmed.len == 0 or trimmed[0] == '#') continue;
 
