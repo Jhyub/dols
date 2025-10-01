@@ -8,4 +8,3 @@ After=systemd-modules-load.service
 [Service]
 Type=exec
 ExecStart=/usr/bin/dols
-ExecStopPost=/bin/systemctl restart systemd-cryptsetup@root.service

@@ -3,6 +3,7 @@ const config = @import("config.zig");
 const crypttab = @import("crypttab.zig");
 const cryptsetup = @import("cryptsetup.zig");
 const shadow = @import("shadow.zig");
+const sap = @import("systemd_ask_password.zig");
 
 const c = @cImport({
     @cInclude("libssh/libssh.h");
@@ -58,6 +59,36 @@ pub fn startSshd(allocator: std.mem.Allocator, conf: *const config.Config, entri
             }
             idx += 1;
         }
+
+        std.debug.print("All devices decrypted successfully\n", .{});
+
+        const ask_files = try sap.Ask.list(allocator);
+        defer allocator.free(ask_files);
+
+        if (ask_files.len > 0) {
+            var dir = try std.fs.cwd().openDir("/run/systemd/ask-password", .{ .iterate = true });
+            defer dir.close();
+            for (ask_files) |filename| {
+                defer allocator.free(filename);
+
+                const ask = try sap.Ask.readFrom(allocator, dir.openFile(filename, .{}) catch continue);
+                defer ask.deinit();
+
+                const proc_path = try std.fmt.allocPrint(allocator, "/proc/{d}", .{ask.pid});
+                defer allocator.free(proc_path);
+
+                var proc_dir = try std.fs.cwd().openDir(proc_path, .{ .iterate = true });
+                defer proc_dir.close();
+
+                var buf: [4096]u8 = undefined;
+                const exe = try proc_dir.readLink("exe", &buf);
+                if (std.mem.eql(u8, exe, "/usr/bin/systemd-cryptsetup")) {
+                    try ask.answer(allocator, "", true, false);
+                    break;
+                }
+            }
+        }
+
         return;
     }
 }
@@ -84,7 +115,6 @@ fn authenticateUser(allocator: std.mem.Allocator, session: *c.ssh_session_struct
                         allocator.free(username);
                         username = try allocator.dupeZ(u8, std.mem.span(c.ssh_message_auth_user(msg)));
                         const password = std.mem.span(c.ssh_message_auth_password(msg));
-                        std.debug.print("User {s} wants to authenticate with password {s}\n", .{ username, password });
                         if (shadow.authenticateByUsername(username, password)) {
                             _ = c.ssh_message_auth_reply_success(msg, 1);
                             return true;
@@ -100,7 +130,6 @@ fn authenticateUser(allocator: std.mem.Allocator, session: *c.ssh_session_struct
                             _ = c.ssh_message_auth_interactive_request(msg, name, @ptrCast(instruction), 1, @ptrCast(&prompt), @ptrCast(&echo));
                         } else {
                             const reply = std.mem.span(c.ssh_userauth_kbdint_getanswer(session, 0));
-                            std.debug.print("User {s} wants to authenticate with password {s}\n", .{ username, reply });
                             if (shadow.authenticateByUsername(username, reply)) {
                                 _ = c.ssh_message_auth_reply_success(msg, 1);
                                 return true;
@@ -111,7 +140,6 @@ fn authenticateUser(allocator: std.mem.Allocator, session: *c.ssh_session_struct
                     else => {
                         allocator.free(username);
                         username = try allocator.dupeZ(u8, std.mem.span(c.ssh_message_auth_user(msg)));
-                        std.debug.print("User {s} wants to authenticate with method {}\n", .{ username, c.ssh_message_subtype(msg) });
                         _ = c.ssh_message_auth_set_methods(msg, c.SSH_AUTH_METHOD_INTERACTIVE);
                         _ = c.ssh_message_reply_default(msg);
                     },
