@@ -41,7 +41,7 @@ pub const Ask = struct {
 
         var buf: [4096]u8 = undefined;
         var file_reader = file.reader(&buf);
-        var reader = &file_reader.interface;
+        const reader = &file_reader.interface;
 
         var ask = Ask{
             .arena = arena,
@@ -111,7 +111,7 @@ pub const Ask = struct {
         }
 
         const sockfd = try std.posix.socket(std.posix.AF.UNIX, std.posix.SOCK.DGRAM, 0);
-        var addr = try std.net.Address.initUnix(self.socket);
+        const addr = try std.net.Address.initUnix(self.socket);
         try std.posix.connect(sockfd, &addr.any, addr.getOsSockLen());
         const socket = std.net.Stream{ .handle = sockfd };
         defer socket.close();
