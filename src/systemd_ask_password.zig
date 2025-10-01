@@ -44,15 +44,12 @@ pub const Ask = struct {
         var file_reader = file.reader(&buf);
         const reader = &file_reader.interface;
 
-        var ask = Ask{
-            .arena = arena,
-            .echo = false,
-            .icon = null,
-            .message = null,
-            .not_after = 0,
-            .pid = 0,
-            .socket = undefined,
-        };
+        var echo: ?bool = null;
+        var icon: ?[]const u8 = null;
+        var message: ?[]const u8 = null;
+        var not_after: ?i32 = null;
+        var pid: ?u32 = null;
+        var socket: ?[]const u8 = null;
 
         var is_section_ask = false;
         while (reader.takeDelimiterExclusive('\n')) |line| {
@@ -71,17 +68,17 @@ pub const Ask = struct {
                 const value = std.mem.trim(u8, trimmed[eq_pos + 1 ..], " \t");
 
                 if (std.mem.eql(u8, key, "Echo")) {
-                    ask.echo = !std.mem.eql(u8, value, "0");
+                    echo = !std.mem.eql(u8, value, "0");
                 } else if (std.mem.eql(u8, key, "Icon")) {
-                    ask.icon = arena_allocator.dupe(u8, value) catch null;
+                    icon = arena_allocator.dupe(u8, value) catch null;
                 } else if (std.mem.eql(u8, key, "Message")) {
-                    ask.message = arena_allocator.dupe(u8, value) catch null;
+                    message = arena_allocator.dupe(u8, value) catch null;
                 } else if (std.mem.eql(u8, key, "NotAfter")) {
-                    ask.not_after = std.fmt.parseInt(i32, value, 10) catch 0;
+                    not_after = std.fmt.parseInt(i32, value, 10) catch 0;
                 } else if (std.mem.eql(u8, key, "PID")) {
-                    ask.pid = std.fmt.parseInt(u32, value, 10) catch 0;
+                    pid = std.fmt.parseInt(u32, value, 10) catch 0;
                 } else if (std.mem.eql(u8, key, "Socket")) {
-                    ask.socket = arena_allocator.dupe(u8, value) catch "";
+                    socket = arena_allocator.dupe(u8, value) catch return error.InvalidSocket;
                 }
             }
         } else |err| {
@@ -93,7 +90,15 @@ pub const Ask = struct {
             }
         }
 
-        return ask;
+        return Ask{
+            .arena = arena,
+            .echo = echo orelse false,
+            .icon = icon,
+            .message = message,
+            .not_after = not_after orelse 0,
+            .pid = pid orelse return error.InvalidPID,
+            .socket = socket orelse return error.InvalidSocket,
+        };
     }
 
     pub fn answer(self: *const Self, allocator: std.mem.Allocator, password: []const u8, was_entry_successful: bool, ignore_skip: bool) !void {
