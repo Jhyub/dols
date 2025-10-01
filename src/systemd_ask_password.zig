@@ -28,7 +28,7 @@ pub const Ask = struct {
         while (try it.next()) |entry| {
             if (entry.kind != .file) continue;
             if (!std.mem.startsWith(u8, entry.name, "ask.")) continue;
-            try ret.append(allocator, entry.name);
+            try ret.append(allocator, try allocator.dupe(u8, entry.name));
         }
 
         return ret.toOwnedSlice(allocator);
