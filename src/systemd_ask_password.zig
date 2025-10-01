@@ -21,7 +21,7 @@ pub const Ask = struct {
         var ret: std.ArrayList([]const u8) = .empty;
         defer ret.deinit(allocator);
 
-        var files = std.fs.cwd().openDir("/run/systemd/ask-password", .{.iterate=true}) catch return ret.toOwnedSlice(allocator);
+        var files = std.fs.cwd().openDir("/run/systemd/ask-password", .{ .iterate = true }) catch return ret.toOwnedSlice(allocator);
         defer files.close();
 
         var it = files.iterate();
