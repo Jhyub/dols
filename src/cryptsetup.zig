@@ -11,7 +11,7 @@ fn cryptInit(entry: *crypttab.CrypttabEntry) !*c.struct_crypt_device {
     return cd.?;
 }
 
-pub fn attatchDeviceByPassword(entry: *crypttab.CrypttabEntry, password: [:0]const u8) !void {
+pub fn attachDeviceByPassword(entry: *crypttab.CrypttabEntry, password: [:0]const u8) !void {
     const cd = try cryptInit(entry);
     defer _ = c.crypt_free(cd);
 

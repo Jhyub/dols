@@ -192,7 +192,7 @@ fn tryDecrypt(allocator: std.mem.Allocator, session: *c.ssh_session_struct, entr
                             defer allocator.free(instruction);
                             _ = c.ssh_message_auth_interactive_request(msg, name, @ptrCast(instruction), 1, @ptrCast(&prompt), @ptrCast(&echo));
                         } else {
-                            _ = cryptsetup.attatchDeviceByPassword(entry, std.mem.span(c.ssh_userauth_kbdint_getanswer(session, 0))) catch {
+                            _ = cryptsetup.attachDeviceByPassword(entry, std.mem.span(c.ssh_userauth_kbdint_getanswer(session, 0))) catch {
                                 _ = c.ssh_message_auth_set_methods(msg, c.SSH_AUTH_METHOD_INTERACTIVE);
                                 _ = c.ssh_message_reply_default(msg);
                                 return false;
