@@ -17,14 +17,15 @@ pub const Ask = struct {
 
     const Self = @This();
 
-    pub fn list(allocator: std.mem.Allocator) [][]const u8 {
-        const files = std.fs.cwd().openDir("/run/systemd/ask-password", .{}) catch return .{};
-        defer files.close();
-
+    pub fn list(allocator: std.mem.Allocator) ![][]const u8 {
         var ret: std.ArrayList([]const u8) = .empty;
         defer ret.deinit(allocator);
 
-        for (files.iterate()) |entry| {
+        var files = std.fs.cwd().openDir("/run/systemd/ask-password", .{.iterate=true}) catch return ret.toOwnedSlice(allocator);
+        defer files.close();
+
+        var it = files.iterate();
+        while (try it.next()) |entry| {
             if (entry.kind != .file) continue;
             if (!std.mem.startsWith(u8, entry.name, "ask.")) continue;
             try ret.append(allocator, entry.name);
