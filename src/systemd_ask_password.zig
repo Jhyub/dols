@@ -115,6 +115,9 @@ pub const Ask = struct {
         try std.posix.connect(sockfd, &addr.any, addr.getOsSockLen());
         const socket = std.net.Stream{ .handle = sockfd };
         defer socket.close();
+        var buf: [1024]u8 = undefined;
+        var sock_writer = socket.writer(&buf);
+        const writer = &sock_writer.interface;
 
         const msg = blk: {
             if (was_entry_successful) {
@@ -125,7 +128,8 @@ pub const Ask = struct {
         };
         defer allocator.free(msg);
 
-        _ = try socket.write(msg);
+        try writer.writeAll(msg);
+        try writer.flush(); // not sure why we need this seperately
     }
 
     pub fn deinit(self: *const Self) void {
