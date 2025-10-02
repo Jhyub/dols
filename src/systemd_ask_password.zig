@@ -20,6 +20,11 @@ pub const Ask = struct {
     pub fn list(allocator: std.mem.Allocator) ![][]const u8 {
         var ret: std.ArrayList([]const u8) = .empty;
         defer ret.deinit(allocator);
+        errdefer {
+            for (ret.items) |item| {
+                allocator.free(item);
+            }
+        }
 
         var files = std.fs.cwd().openDir("/run/systemd/ask-password", .{ .iterate = true }) catch return ret.toOwnedSlice(allocator);
         defer files.close();

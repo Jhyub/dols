@@ -37,6 +37,11 @@ pub fn parseCrypttab(allocator: std.mem.Allocator, crypttab: []const u8) ![]Cryp
     var lines = std.mem.splitSequence(u8, crypttab, "\n");
     var list: std.ArrayList(CrypttabEntry) = .empty;
     defer list.deinit(allocator);
+    errdefer {
+        for (list.items) |item| {
+            item.deinit();
+        }
+    }
     while (lines.next()) |line| {
         if (line.len == 0) continue;
         if (line[0] == '#') continue;
