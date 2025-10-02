@@ -38,6 +38,7 @@ pub const Ask = struct {
         const arena = try allocator.create(std.heap.ArenaAllocator);
         errdefer allocator.destroy(arena);
         arena.* = std.heap.ArenaAllocator.init(allocator);
+        errdefer arena.deinit();
         const arena_allocator = arena.allocator();
 
         var buf: [4096]u8 = undefined;

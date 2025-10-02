@@ -13,6 +13,7 @@ pub const CrypttabEntry = struct {
         const arena = try allocator.create(std.heap.ArenaAllocator);
         errdefer allocator.destroy(arena);
         arena.* = std.heap.ArenaAllocator.init(allocator);
+        errdefer arena.deinit();
         const arena_allocator = arena.allocator();
 
         var parts = std.mem.splitSequence(u8, line, " ");
