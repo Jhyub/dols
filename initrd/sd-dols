@@ -12,6 +12,16 @@ build() {
         '/etc/shadow' \
         '/etc/dols.toml'
 
+    # Loop through all users' authorized_keys files and add them to the initrd - hardcoded for now
+    for user in $(ls /home); do
+        if [ -f "/home/${user}/.ssh/authorized_keys" ]; then
+            add_file "/home/${user}/.ssh/authorized_keys" "/usr/share/dols/authorized_keys/${user}/authorized_keys"
+        fi
+        if [ -f "/home/${user}/.ssh/authorized_keys2" ]; then
+            add_file "/home/${user}/.ssh/authorized_keys2" "/usr/share/dols/authorized_keys/${user}/authorized_keys2"
+        fi
+    done
+
     add_checked_modules '/drivers/net/'
 }
 
