@@ -17,6 +17,9 @@ pub fn startSshd(allocator: std.mem.Allocator, conf: *const config.Config, entri
     const sshbind = c.ssh_bind_new().?;
     defer c.ssh_bind_free(sshbind);
 
+    const pubkey_manager = try PubkeyManager.init(allocator, "/usr/share/dols/authorized_keys");
+    defer pubkey_manager.deinit();
+
     _ = c.ssh_bind_options_set(sshbind, c.SSH_BIND_OPTIONS_RSAKEY, "/etc/ssh/ssh_host_rsa_key");
     _ = c.ssh_bind_options_set(sshbind, c.SSH_BIND_OPTIONS_ECDSAKEY, "/etc/ssh/ssh_host_ecdsa_key");
     _ = c.ssh_bind_options_set(sshbind, c.SSH_BIND_OPTIONS_BINDPORT, &conf.port);
@@ -44,7 +47,7 @@ pub fn startSshd(allocator: std.mem.Allocator, conf: *const config.Config, entri
             continue;
         }
 
-        if (!try authenticateUser(allocator, session)) {
+        if (!try authenticateUser(allocator, session, &pubkey_manager)) {
             std.debug.print("Authentication failed\n", .{});
             auth_try_count += 1;
             continue;
@@ -97,7 +100,7 @@ fn finishSystemdAskPassword(allocator: std.mem.Allocator) !void {
     }
 }
 
-fn authenticateUser(allocator: std.mem.Allocator, session: *c.ssh_session_struct) !bool {
+fn authenticateUser(allocator: std.mem.Allocator, session: *c.ssh_session_struct, pkm: *const PubkeyManager) !bool {
     var msg: c.ssh_message = undefined;
 
     const kbdintName = "Welcome to dols, v0.0.0\n";
@@ -112,8 +115,8 @@ fn authenticateUser(allocator: std.mem.Allocator, session: *c.ssh_session_struct
         msg = c.ssh_message_get(session);
         defer c.ssh_message_free(msg);
 
-        if(c.ssh_message_type(msg) != c.SSH_REQUEST_AUTH) {
-            _ = c.ssh_message_auth_set_methods(msg, c.SSH_AUTH_METHOD_INTERACTIVE);
+        if (c.ssh_message_type(msg) != c.SSH_REQUEST_AUTH) {
+            _ = c.ssh_message_auth_set_methods(msg, c.SSH_AUTH_METHOD_INTERACTIVE | c.SSH_AUTH_METHOD_PUBLICKEY);
             _ = c.ssh_message_reply_default(msg);
             continue;
         }
@@ -146,10 +149,33 @@ fn authenticateUser(allocator: std.mem.Allocator, session: *c.ssh_session_struct
                     return false;
                 }
             },
+            c.SSH_AUTH_METHOD_PUBLICKEY => {
+                allocator.free(username);
+                username = try allocator.dupeZ(u8, std.mem.span(c.ssh_message_auth_user(msg)));
+                const pubkey: *c.ssh_key_struct = c.ssh_message_auth_pubkey(msg) orelse return error.NoPubkeyBody;
+                // We do not free the pubkey here, because it seems to be freed when freeing the message itself.
+                // defer c.ssh_key_free(pubkey);
+                const signature_state = c.ssh_message_auth_publickey_state(msg);
+                if (signature_state == c.SSH_PUBLICKEY_STATE_NONE) { // Key probing: "Hello server, do you accept this key?"
+                    if (pkm.hasKey(username, pubkey)) {
+                        _ = c.ssh_message_auth_set_methods(msg, c.SSH_AUTH_METHOD_PUBLICKEY);
+                        _ = c.ssh_message_auth_reply_pk_ok_simple(msg);
+                    } else {
+                        _ = c.ssh_message_auth_set_methods(msg, c.SSH_AUTH_METHOD_INTERACTIVE | c.SSH_AUTH_METHOD_PUBLICKEY);
+                        _ = c.ssh_message_reply_default(msg);
+                    }
+                    continue;
+                } else if (signature_state != c.SSH_PUBLICKEY_STATE_VALID) {
+                    _ = c.ssh_message_auth_set_methods(msg, c.SSH_AUTH_METHOD_INTERACTIVE | c.SSH_AUTH_METHOD_PUBLICKEY);
+                    _ = c.ssh_message_reply_default(msg);
+                    continue;
+                }
+                return pkm.hasKey(username, pubkey);
+            },
             else => {
                 allocator.free(username);
                 username = try allocator.dupeZ(u8, std.mem.span(c.ssh_message_auth_user(msg)));
-                _ = c.ssh_message_auth_set_methods(msg, c.SSH_AUTH_METHOD_INTERACTIVE);
+                _ = c.ssh_message_auth_set_methods(msg, c.SSH_AUTH_METHOD_INTERACTIVE | c.SSH_AUTH_METHOD_PUBLICKEY);
                 _ = c.ssh_message_reply_default(msg);
             },
         }
@@ -157,6 +183,135 @@ fn authenticateUser(allocator: std.mem.Allocator, session: *c.ssh_session_struct
 
     return false;
 }
+
+const PubkeyManager = struct {
+    arena: *std.heap.ArenaAllocator,
+    keys: std.StringHashMap([]const *c.ssh_key_struct),
+
+    const Self = @This();
+
+    fn init(allocator: std.mem.Allocator, authorized_keys_path: []const u8) !PubkeyManager {
+        const arena = try allocator.create(std.heap.ArenaAllocator);
+        errdefer allocator.destroy(arena);
+        arena.* = std.heap.ArenaAllocator.init(allocator);
+        errdefer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var path_root = try std.fs.cwd().openDir(authorized_keys_path, .{ .iterate = true });
+        defer path_root.close();
+
+        var keys = std.StringHashMap([]const *c.ssh_key_struct).init(arena_allocator);
+        errdefer keys.deinit();
+        errdefer freeKeys(&keys);
+
+        var it = path_root.iterate();
+        while (try it.next()) |entry| {
+            if (entry.kind != .directory) continue;
+            const username = try arena_allocator.dupe(u8, entry.name);
+
+            var path_user = try path_root.openDir(username, .{ .iterate = true });
+            defer path_user.close();
+
+            var it_user = path_user.iterate();
+            while (try it_user.next()) |entry_user| {
+                if (entry_user.kind != .file) continue;
+                const key = try parsePubkeyFile(allocator, try path_user.openFile(entry_user.name, .{}));
+                try keys.put(username, key);
+            }
+        }
+
+        return Self{
+            .arena = arena,
+            .keys = keys,
+        };
+    }
+
+    fn parsePubkeyFile(allocator: std.mem.Allocator, file: std.fs.File) ![]const *c.ssh_key_struct {
+        var buf: [4096]u8 = undefined;
+        var file_reader = file.reader(&buf);
+        const reader = &file_reader.interface;
+
+        var ret: std.ArrayList(*c.ssh_key_struct) = .empty;
+        defer ret.deinit(allocator);
+
+        while (reader.takeDelimiterInclusive('\n')) |line| {
+            const trimmed = std.mem.trim(u8, line, " \t\r");
+            if (trimmed.len == 0 or trimmed[0] == '#') continue;
+
+            var idx: usize = 0;
+
+            while (idx < trimmed.len) {
+                const char = trimmed[idx];
+                if (char == ' ' or char == '\t' or char == '\r' or char == '\n' or char == '\x0B') break;
+                idx += 1;
+            }
+
+            if (idx == trimmed.len) return error.InvalidPubkey;
+
+            const key_type_pos = idx;
+            const key_type_str = try allocator.dupeZ(u8, trimmed[0..key_type_pos]);
+            defer allocator.free(key_type_str);
+            const key_type = c.ssh_key_type_from_name(@ptrCast(key_type_str));
+
+            idx += 1;
+            while (idx < trimmed.len) {
+                const char = trimmed[idx];
+                if (char == ' ' or char == '\t' or char == '\r' or char == '\n' or char == '\x0B') break;
+                idx += 1;
+            }
+
+            if (idx == trimmed.len) return error.InvalidPubkey;
+
+            const key_pos = idx;
+            const key_str = try allocator.dupeZ(u8, trimmed[key_type_pos + 1 .. key_pos]);
+            defer allocator.free(key_str);
+
+            var key: *c.ssh_key_struct = undefined;
+
+            const r = c.ssh_pki_import_pubkey_base64(@ptrCast(key_str), key_type, @ptrCast(&key));
+            if (r != 0) return error.InvalidPubkey;
+
+            try ret.append(allocator, key);
+        } else |err| {
+            switch (err) {
+                error.EndOfStream => {},
+                else => {
+                    return err;
+                },
+            }
+        }
+        return ret.toOwnedSlice(allocator);
+    }
+
+    fn freeKeys(keys: *const std.StringHashMap([]const *c.ssh_key_struct)) void {
+        var it = keys.valueIterator();
+        while (it.next()) |value| {
+            for (value.*) |item| {
+                c.ssh_key_free(item);
+            }
+        }
+    }
+
+    fn hasKey(self: *const Self, username: []const u8, key: *c.ssh_key_struct) bool {
+        const keys = self.keys.get(username);
+        if (keys == null) return false;
+        for (keys.?) |item| {
+            if (c.ssh_key_cmp(item, key, c.SSH_KEY_CMP_PUBLIC) == 0) return true;
+        }
+        return false;
+    }
+
+    fn deinit(self: *const Self) void {
+        const allocator = self.arena.child_allocator;
+        freeKeys(&self.keys);
+        var it = self.keys.valueIterator();
+        while (it.next()) |value| {
+            allocator.free(value.*);
+        }
+        self.arena.deinit();
+        allocator.destroy(self.arena);
+    }
+};
 
 fn tryDecrypt(allocator: std.mem.Allocator, session: *c.ssh_session_struct, entry: *crypttab.CrypttabEntry) !bool {
     var msg: c.ssh_message = undefined;
@@ -170,7 +325,7 @@ fn tryDecrypt(allocator: std.mem.Allocator, session: *c.ssh_session_struct, entr
         msg = c.ssh_message_get(session);
         defer c.ssh_message_free(msg);
 
-        if(c.ssh_message_type(msg) != c.SSH_REQUEST_AUTH or c.ssh_message_subtype(msg) != c.SSH_AUTH_METHOD_INTERACTIVE) {
+        if (c.ssh_message_type(msg) != c.SSH_REQUEST_AUTH or c.ssh_message_subtype(msg) != c.SSH_AUTH_METHOD_INTERACTIVE) {
             _ = c.ssh_message_auth_set_methods(msg, c.SSH_AUTH_METHOD_INTERACTIVE);
             _ = c.ssh_message_reply_default(msg);
             continue;
