@@ -170,6 +170,7 @@ fn authenticateUser(allocator: std.mem.Allocator, session: *c.ssh_session_struct
                     _ = c.ssh_message_reply_default(msg);
                     continue;
                 }
+                _ = c.ssh_message_auth_reply_success(msg, 1);
                 return pkm.hasKey(username, pubkey);
             },
             else => {
