@@ -58,8 +58,8 @@ pub const Ask = struct {
         var socket: ?[]const u8 = null;
 
         var is_section_ask = false;
-        while (reader.takeDelimiterExclusive('\n')) |line| {
-            const trimmed = std.mem.trim(u8, line, " \t\r");
+        while (reader.takeDelimiterInclusive('\n')) |line| {
+            const trimmed = std.mem.trim(u8, line, " \t\r\n");
             if (trimmed.len == 0 or trimmed[0] == '#') continue;
 
             if (std.mem.eql(u8, trimmed, "[Ask]")) {
