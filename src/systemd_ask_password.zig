@@ -150,3 +150,32 @@ pub const Ask = struct {
         allocator.destroy(self.arena);
     }
 };
+
+fn finishSystemdAskPassword(allocator: std.mem.Allocator) !void {
+    const ask_files = try Ask.list(allocator);
+    defer allocator.free(ask_files);
+
+    if (ask_files.len > 0) {
+        var dir = try std.fs.cwd().openDir("/run/systemd/ask-password", .{ .iterate = true });
+        defer dir.close();
+        for (ask_files) |filename| {
+            defer allocator.free(filename);
+
+            const ask = try Ask.readFrom(allocator, try dir.openFile(filename, .{}));
+            defer ask.deinit();
+
+            const proc_path = try std.fmt.allocPrint(allocator, "/proc/{d}", .{ask.pid});
+            defer allocator.free(proc_path);
+
+            var proc_dir = try std.fs.cwd().openDir(proc_path, .{ .iterate = true });
+            defer proc_dir.close();
+
+            var buf: [4096]u8 = undefined;
+            const exe = try proc_dir.readLink("exe", &buf);
+            if (std.mem.eql(u8, exe, "/usr/bin/systemd-cryptsetup")) {
+                try ask.answer(allocator, "", true, false);
+                break;
+            }
+        }
+    }
+}
