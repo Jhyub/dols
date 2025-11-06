@@ -151,7 +151,7 @@ pub const Ask = struct {
     }
 };
 
-fn finishSystemdAskPassword(allocator: std.mem.Allocator) !void {
+pub fn finishSystemdAskPassword(allocator: std.mem.Allocator) !void {
     const ask_files = try Ask.list(allocator);
     defer allocator.free(ask_files);
 
