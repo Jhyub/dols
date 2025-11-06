@@ -25,5 +25,5 @@ pub fn main() !void {
         entry.deinit();
     };
 
-    try lib.ssh.startSshd(allocator, &config, entries);
+    try lib.ssh.server.startServer(allocator, &config, entries);
 }
